@@ -1,0 +1,25 @@
+{
+  "name": "roster",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Multi-tenant HR & attendance management for ZKTeco MB20-VL biometric terminals",
+  "workspaces": [
+    "packages/shared",
+    "packages/api",
+    "packages/web",
+    "packages/simulator"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace @roster/api",
+    "dev:web": "npm run dev --workspace @roster/web",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "simulator": "npm run start --workspace @roster/simulator",
+    "db:generate": "npm run db:generate --workspace @roster/api",
+    "db:migrate": "npm run db:migrate --workspace @roster/api",
+    "db:seed": "npm run db:seed --workspace @roster/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

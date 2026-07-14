@@ -1,0 +1,67 @@
+# Roster — runs identically on-prem (LAN with the device) or in the cloud.
+# The only deployment-specific knobs live in .env (SYNC_MODE, hosts, secrets).
+#
+#   cp .env.example .env   &&   docker compose up --build
+#
+# NOTE: no reverse proxy yet — added later once hosting is chosen.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - roster_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    # Inside the compose network the api reaches Postgres at host `db`.
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    # Apply migrations and (idempotently) seed before serving, so a fresh
+    # `docker compose up` is usable with zero manual DB steps.
+    command:
+      - sh
+      - -c
+      - >-
+        npm run db:migrate --workspace @roster/api &&
+        npm run db:seed --workspace @roster/api &&
+        npm run start --workspace @roster/api
+    depends_on:
+      db:
+        condition: service_healthy
+    # In poll mode the api connects out to devices on the LAN (TCP 4370);
+    # no extra ports needed. In push mode devices reach it via API_PORT above.
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+      args:
+        # Baked into the client bundle at build time.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      - api
+
+volumes:
+  roster_db_data:
